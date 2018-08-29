@@ -1,42 +1,45 @@
-package com.Leo.excel;
+package src.com.Leo.excel;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.poi.hssf.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.ss.util.CellRangeAddressList;
 import org.jdom.Attribute;
 import org.jdom.Document;
 import org.jdom.Element;
-import org.jdom.JDOMException;
 import org.jdom.input.SAXBuilder;
 
 import java.io.File;
-import java.io.IOException;
+import java.io.FileOutputStream;
 import java.util.List;
 
 /**
  * @Auther: Leo
- * @Date: 2018/8/23 19:23
+ * @Date: 2018/8/29 13:18
  * @Description:
  */
 public class CreateTemplate {
+
     /**
      * 创建模板文件
+     * @author David
      * @param args
      */
-    public static void main(String[] args){
+    public static void main(String[] args) {
         //获取解析xml文件路径
-        String path = System.getProperty("user.dir") +"/bin/student.xml";
+        String path = System.getProperty("user.dir") + "/excel_study/src/student.xml";
         File file = new File(path);
         SAXBuilder builder = new SAXBuilder();
         try {
             //解析xml文件
             Document parse = builder.build(file);
             //创建Excel
-            HSSFWorkbook wb =new HSSFWorkbook();
+            HSSFWorkbook wb = new HSSFWorkbook();
             //创建sheet
             HSSFSheet sheet = wb.createSheet("Sheet0");
 
-            //获取xml文件根节点
+            //获取xml文件跟节点
             Element root = parse.getRootElement();
             //获取模板名称
             String templateName = root.getAttribute("name").getValue();
@@ -50,36 +53,34 @@ public class CreateTemplate {
             //设置标题
             Element title = root.getChild("title");
             List<Element> trs = title.getChildren("tr");
-            for(int i=0;i<trs.size();i++){
+            for (int i = 0; i < trs.size(); i++) {
                 Element tr = trs.get(i);
                 List<Element> tds = tr.getChildren("td");
                 HSSFRow row = sheet.createRow(rownum);
                 HSSFCellStyle cellStyle = wb.createCellStyle();
-                cellStyle.setAlignment((HSSFCellStyle.ALIGN_CENTER));
-
-
-                for(column = 0;column<= tds.size();column++){
+                cellStyle.setAlignment(HSSFCellStyle.ALIGN_CENTER);
+                for(column = 0;column <tds.size();column ++){
                     Element td = tds.get(column);
                     HSSFCell cell = row.createCell(column);
                     Attribute rowSpan = td.getAttribute("rowspan");
                     Attribute colSpan = td.getAttribute("colspan");
                     Attribute value = td.getAttribute("value");
-                    if(value != null){
+                    if(value !=null){
                         String val = value.getValue();
                         cell.setCellValue(val);
-                        int rspan = rowSpan.getIntValue()-1;
-                        int cspan = colSpan.getIntValue()-1;
+                        int rspan = rowSpan.getIntValue() - 1;
+                        int cspan = colSpan.getIntValue() -1;
 
                         //设置字体
                         HSSFFont font = wb.createFont();
                         font.setFontName("仿宋_GB2312");
-                        font.setBoldweight(HSSFFont.BOLDWEIGHT_BOLD);//加粗
-                        font.setFontHeight((short)12);
+                        font.setBoldweight(HSSFFont.BOLDWEIGHT_BOLD);//字体加粗
+//						font.setFontHeight((short)12);
+                        font.setFontHeightInPoints((short)12);
                         cellStyle.setFont(font);
                         cell.setCellStyle(cellStyle);
-
                         //合并单元格居中
-                        sheet.addMergedRegion(new CellRangeAddress(rspan,rspan,0,cspan));
+                        sheet.addMergedRegion(new CellRangeAddress(rspan, rspan, 0, cspan));
                     }
                 }
                 rownum ++;
@@ -87,28 +88,88 @@ public class CreateTemplate {
             //设置表头
             Element thead = root.getChild("thead");
             trs = thead.getChildren("tr");
-            for (int i =0;i<trs.size();i++){
+            for (int i = 0; i < trs.size(); i++) {
                 Element tr = trs.get(i);
                 HSSFRow row = sheet.createRow(rownum);
                 List<Element> ths = tr.getChildren("th");
-                for (column = 0;column<=ths.size();column++){
+                for(column = 0;column < ths.size();column++){
                     Element th = ths.get(column);
                     Attribute valueAttr = th.getAttribute("value");
                     HSSFCell cell = row.createCell(column);
-                    if(valueAttr!=null){
-                        String value = valueAttr.getValue();
+                    if(valueAttr != null){
+                        String value =valueAttr.getValue();
                         cell.setCellValue(value);
                     }
                 }
                 rownum++;
-
             }
 
-        } catch (JDOMException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
+            //设置数据区域样式
+            Element tbody = root.getChild("tbody");
+            Element tr = tbody.getChild("tr");
+            int repeat = tr.getAttribute("repeat").getIntValue();
+
+            List<Element> tds = tr.getChildren("td");
+            for (int i = 0; i < repeat; i++) {
+                HSSFRow row = sheet.createRow(rownum);
+                for(column =0 ;column < tds.size();column++){
+                    Element td = tds.get(column);
+                    HSSFCell cell = row.createCell(column);
+                    setType(wb,cell,td);
+                }
+                rownum++;
+            }
+
+            //生成Excel导入模板
+            File tempFile = new File("c:/github/" + templateName + ".xls");
+            tempFile.delete();
+            tempFile.createNewFile();
+            FileOutputStream stream = FileUtils.openOutputStream(tempFile);
+            wb.write(stream);
+            stream.close();
+
+        } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+    /**
+     * 测试单元格样式
+     * @param wb
+     * @param cell
+     * @param td
+     */
+    private static void setType(HSSFWorkbook wb, HSSFCell cell, Element td) {
+        Attribute typeAttr = td.getAttribute("type");
+        String type = typeAttr.getValue();
+        HSSFDataFormat format = wb.createDataFormat();
+        HSSFCellStyle cellStyle = wb.createCellStyle();
+        if("NUMERIC".equalsIgnoreCase(type)){
+            cell.setCellType(HSSFCell.CELL_TYPE_NUMERIC);
+            Attribute formatAttr = td.getAttribute("format");
+            String formatValue = formatAttr.getValue();
+            formatValue = StringUtils.isNotBlank(formatValue)? formatValue : "#,##0.00";
+            cellStyle.setDataFormat(format.getFormat(formatValue));
+        }else if("STRING".equalsIgnoreCase(type)){
+            cell.setCellValue("");
+            cell.setCellType(HSSFCell.CELL_TYPE_STRING);
+            cellStyle.setDataFormat(format.getFormat("@"));
+        }else if("DATE".equalsIgnoreCase(type)){
+            cell.setCellType(HSSFCell.CELL_TYPE_NUMERIC);
+            cellStyle.setDataFormat(format.getFormat("yyyy-m-d"));
+        }else if("ENUM".equalsIgnoreCase(type)){
+            CellRangeAddressList regions =
+                    new CellRangeAddressList(cell.getRowIndex(), cell.getRowIndex(),
+                            cell.getColumnIndex(), cell.getColumnIndex());
+            Attribute enumAttr = td.getAttribute("format");
+            String enumValue = enumAttr.getValue();
+            //加载下拉列表内容
+            DVConstraint constraint =
+                    DVConstraint.createExplicitListConstraint(enumValue.split(","));
+            //数据有效性对象
+            HSSFDataValidation dataValidation = new HSSFDataValidation(regions, constraint);
+            wb.getSheetAt(0).addValidationData(dataValidation);
+        }
+        cell.setCellStyle(cellStyle);
     }
 
     /**
@@ -118,19 +179,19 @@ public class CreateTemplate {
      */
     private static void setColumnWidth(HSSFSheet sheet, Element colgroup) {
         List<Element> cols = colgroup.getChildren("col");
-        for(int i = 0;i<cols.size();i++){
+        for (int i = 0; i < cols.size(); i++) {
             Element col = cols.get(i);
             Attribute width = col.getAttribute("width");
-            String unit = width.getValue().replaceAll("[0-9,\\.]","");
-            String value = width.getValue().replaceAll(unit,"");
-            int v = 0;
-            if(StringUtils.isBlank(unit)||"px".endsWith(unit)){
-                v = Math.round(Float.parseFloat(value)*37F);
-            }else if("em".endsWith(unit)){
-                v = Math.round(Float.parseFloat(value)*267.5F);
+            String unit = width.getValue().replaceAll("[0-9,\\.]", "");
+            String value = width.getValue().replaceAll(unit, "");
+            int v=0;
+            if(StringUtils.isBlank(unit) || "px".endsWith(unit)){
+                v = Math.round(Float.parseFloat(value) * 37F);
+            }else if ("em".endsWith(unit)){
+                v = Math.round(Float.parseFloat(value) * 267.5F);
             }
-            sheet.setColumnWidth(i,v);
+            sheet.setColumnWidth(i, v);
         }
-
     }
+
 }
